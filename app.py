@@ -64,4 +64,28 @@ def list_photos():
 def uploaded_file(patient, filename):
     folder = os.path.join(UPLOAD_FOLDER, patient)
     return send_from_directory(folder, filename)
+    from color_analysis import analyze_image_color  # ✅ 引入剛剛的功能
+
+@app.route("/upload", methods=["POST"])
+def upload_image():
+    if 'image' not in request.files:
+        return "No image uploaded", 400
+    image = request.files['image']
+    if image.filename == '':
+        return "No selected file", 400
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"tongue_{timestamp}.jpg"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    image.save(filepath)
+
+    # 🧠 分析舌色
+    main_color, comment = analyze_image_color(filepath)
+
+    return jsonify({
+        "filename": filename,
+        "舌苔主色": main_color,
+        "中醫推論": comment
+    })
+
 
