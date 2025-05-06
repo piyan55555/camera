@@ -10,6 +10,7 @@
     video, canvas { width: 100%; border-radius: 10px; margin-top: 1rem; }
     canvas { position: absolute; top: 1rem; left: 0; pointer-events: none; z-index: 10; }
     button, input { margin: 1rem 0.5rem; padding: 0.6rem 1rem; font-size: 1.2rem; }
+    #result { background: #fff; margin: 1rem auto; max-width: 500px; padding: 1rem; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
@@ -25,6 +26,9 @@
     <button id="historyBtn">查看歷史照片</button>
   </div>
 
+  <!-- 顯示分析結果 -->
+  <div id="result"></div>
+
   <script>
     const video = document.getElementById("camera");
     const canvas = document.getElementById("overlay");
@@ -32,10 +36,10 @@
     const uploadBtn = document.getElementById("uploadBtn");
     const historyBtn = document.getElementById("historyBtn");
     const patientInput = document.getElementById("patientId");
+    const result = document.getElementById("result");
 
     let snapshotBlob = null;
 
-    // 啟動相機
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
       .then(stream => {
         video.srcObject = stream;
@@ -97,7 +101,6 @@
       const ctx = snap.getContext("2d");
       ctx.drawImage(video, 0, 0);
       ctx.drawImage(canvas, 0, 0);
-
       snap.toBlob(blob => {
         snapshotBlob = blob;
         alert("📸 拍照完成，請輸入病患 ID 並上傳！");
@@ -114,9 +117,13 @@
       formData.append("patient_id", patientId);
 
       fetch("/upload", { method: "POST", body: formData })
-        .then(res => res.text())
-        .then(msg => {
-          alert("✅ 上傳成功！");
+        .then(res => res.json())
+        .then(data => {
+          result.innerHTML = `
+            <p>✅ 上傳成功：<strong>${data.filename}</strong></p>
+            <p>🔍 舌苔主色：<strong>${data["舌苔主色"]}</strong></p>
+            <p>🧠 中醫推論：${data["中醫推論"]}</strong></p>
+          `;
         })
         .catch(err => {
           alert("❌ 上傳失敗：" + err.message);
