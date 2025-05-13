@@ -28,7 +28,7 @@ def analyze_image_color(image_path):
     resized = image.resize((50, 50))
     npimg = np.array(resized)
 
-    # 🎯 只取中央 1/3 區域（大約中心格子）
+    # 只取中心 1/3 區域
     h, w, _ = npimg.shape
     crop = npimg[h//3:h*2//3, w//3:w*2//3]
 
@@ -38,6 +38,4 @@ def analyze_image_color(image_path):
 
     category = classify_by_avg_color(r, g, b, brightness)
     meaning = color_map.get(category, "無法判斷")
-
-    print(f"🎯 中心區平均色：R={int(r)}, G={int(g)}, B={int(b)}, 亮度={int(brightness)} → 分類：{category}")
     return category, meaning, (int(r), int(g), int(b))
