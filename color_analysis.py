@@ -9,7 +9,7 @@ color_map = {
     "正常舌色": "正常紅舌或紅帶薄白，健康狀態"
 }
 
-# 根據平均 RGB 值分類
+# 分類規則（基於中心 RGB 平均）
 def classify_by_avg_color(r, g, b, brightness):
     if r > 130 and g > 100 and b < 140:
         return "黃色"
@@ -22,28 +22,22 @@ def classify_by_avg_color(r, g, b, brightness):
     else:
         return "未知"
 
-# 主函式：分析圖片並輸出分類
+# 主色分析函式（只取中央區域）
 def analyze_image_color(image_path):
     image = Image.open(image_path).convert("RGB")
     resized = image.resize((50, 50))
-    pixels = np.array(resized).reshape(-1, 3)
+    npimg = np.array(resized)
 
-    avg = np.mean(pixels, axis=0)
+    # 🎯 只取中央 1/3 區域（大約中心格子）
+    h, w, _ = npimg.shape
+    crop = npimg[h//3:h*2//3, w//3:w*2//3]
+
+    avg = np.mean(crop.reshape(-1, 3), axis=0)
     r, g, b = avg
     brightness = (r + g + b) / 3
 
     category = classify_by_avg_color(r, g, b, brightness)
     meaning = color_map.get(category, "無法判斷")
 
-    print(f"🟡 平均色：R={int(r)}, G={int(g)}, B={int(b)}, 亮度={int(brightness)} → 分類：{category}")
-    return category, meaning
-
-# 單獨執行測試用
-if __name__ == "__main__":
-    image_path = "your_image.jpg"  # 可替換成實際檔案測試
-    if os.path.exists(image_path):
-        color, comment = analyze_image_color(image_path)
-        print(f"舌苔主色：{color}")
-        print(f"中醫推論：{comment}")
-    else:
-        print("⚠️ 圖片不存在，請確認檔案路徑")
+    print(f"🎯 中心區平均色：R={int(r)}, G={int(g)}, B={int(b)}, 亮度={int(brightness)} → 分類：{category}")
+    return category, meaning, (int(r), int(g), int(b))
