@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import datetime
-from color_analysis import analyze_image_color  # 引入顏色分析模組
+from color_analysis import analyze_image_color  # 引入顏色分析模組（含中心區分析）
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
@@ -38,14 +38,15 @@ def upload_image():
     filepath = os.path.join(patient_folder, filename)
     image.save(filepath)
 
-    # 舌苔顏色分析
-    main_color, comment = analyze_image_color(filepath)
+    # 舌苔顏色分析（中心區平均 + RGB）
+    main_color, comment, rgb = analyze_image_color(filepath)
 
     # 回傳分析結果
     return jsonify({
         "filename": filename,
         "舌苔主色": main_color,
-        "中醫推論": comment
+        "中醫推論": comment,
+        "主色RGB": rgb
     })
 
 # 取得特定病人照片清單
