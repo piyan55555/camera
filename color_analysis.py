@@ -16,24 +16,25 @@ def classify_color(rgb):
     r, g, b = rgb
     brightness = (r + g + b) / 3
 
-    # 黃色條件：放寬紅綠值，允許藍稍微高一點
-    if r > 150 and g > 120 and b < 130:
+    # 黃色條件：紅和綠偏高、藍明顯較低
+    if r > 140 and g > 110 and b < 140:
         return "黃色"
 
-    # 白色厚重：不強制 R/G/B 都超過 180，只要整體亮就算
-    elif brightness > 190 and r > 170 and g > 170:
+    # 白色厚重：整體亮度高，且 RGB 差異不大（偏白、偏灰也算）
+    elif brightness > 180 and min(r, g, b) > 160:
         return "白色厚重"
 
-    # 黑灰色：亮度低，且 RGB 差異小（灰、暗紅、灰紫也能進來）
-    elif brightness < 100 and max(abs(r - g), abs(g - b), abs(r - b)) < 40:
+    # 黑灰色：亮度非常低，或灰黑調混合，差異容忍度加大
+    elif brightness < 110 and max(abs(r - g), abs(g - b), abs(r - b)) < 60:
         return "黑灰色"
 
-    # 正常舌色：紅略高即可，允許微微偏紫或偏橘
-    elif r > 130 and g < 150 and b < 150:
+    # 正常舌色：紅色略高，允許微紅、粉紅、微暗紅
+    elif r > 120 and g < 160 and b < 160:
         return "正常舌色"
 
     else:
         return "未知"
+
 
 
 # 分析圖片主色調
