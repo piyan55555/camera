@@ -15,17 +15,26 @@ color_map = {
 def classify_color(rgb):
     r, g, b = rgb
     brightness = (r + g + b) / 3
-    
-    if r > 170 and g > 140 and b < 100:
+
+    # 黃色條件：放寬紅綠值，允許藍稍微高一點
+    if r > 150 and g > 120 and b < 130:
         return "黃色"
-    elif r > 180 and g > 180 and b > 180 and brightness > 200:
+
+    # 白色厚重：不強制 R/G/B 都超過 180，只要整體亮就算
+    elif brightness > 190 and r > 170 and g > 170:
         return "白色厚重"
-    elif brightness < 80 and abs(r - g) < 20 and abs(g - b) < 20:
+
+    # 黑灰色：亮度低，且 RGB 差異小（灰、暗紅、灰紫也能進來）
+    elif brightness < 100 and max(abs(r - g), abs(g - b), abs(r - b)) < 40:
         return "黑灰色"
-    elif r > 150 and g < 130 and b < 130:
+
+    # 正常舌色：紅略高即可，允許微微偏紫或偏橘
+    elif r > 130 and g < 150 and b < 150:
         return "正常舌色"
+
     else:
         return "未知"
+
 
 # 分析圖片主色調
 def analyze_image_color(image_path):
