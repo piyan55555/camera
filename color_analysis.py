@@ -12,16 +12,26 @@ color_map = {
 # 分類條件（用平均 RGB 決定主色）
 def determine_category_from_rgb(r, g, b):
     brightness = (r + g + b) / 3
-    if r > 130 and g > 100 and b < 140:
-        return "黃色"
-    elif brightness > 175 and min(r, g, b) > 150:
-        return "白色厚重"
-    elif brightness < 110 and max(abs(r - g), abs(g - b), abs(r - b)) < 60:
-        return "黑灰色"
-    elif r > 115 and g < 160 and b < 160:
+
+    # 正常舌色：偏紅但不太亮、藍值不高（微粉紅）
+    if r > 130 and g < 140 and b < 140 and brightness < 190:
         return "正常舌色"
+
+    # 黃色：紅綠高但藍明顯低（橘黃）、整體亮一點
+    elif r > 140 and g > 110 and b < 100 and brightness > 150:
+        return "黃色"
+
+    # 白色厚重：整體亮、RGB 相對接近且偏白
+    elif brightness > 180 and min(r, g, b) > 160:
+        return "白色厚重"
+
+    # 黑灰色：偏暗、RGB 接近（灰、黑、深紅）
+    elif brightness < 100 and max(abs(r - g), abs(g - b), abs(r - b)) < 60:
+        return "黑灰色"
+
     else:
         return "未知"
+
 
 # 主函式：回傳分類、推論與主色 RGB
 def analyze_image_color(image_path):
