@@ -118,13 +118,19 @@
 
       fetch("/upload", { method: "POST", body: formData })
         .then(res => res.json())
-        .then(data => {
-          result.innerHTML = `
-            <p>✅ 上傳成功：<strong>${data.filename}</strong></p>
-            <p>🔍 舌苔主色：<strong>${data["舌苔主色"]}</strong></p>
-            <p>🧠 中醫推論：${data["中醫推論"]}</strong></p>
-          `;
-        })
+    .then(data => {
+  const rgb = data["主色RGB"];
+  result.innerHTML = `
+    <p>✅ 上傳成功：<strong>${data.filename}</strong></p>
+    <p>🔍 舌苔主色：<strong>${data["舌苔主色"]}</strong></p>
+    <p>🧠 中醫推論：${data["中醫推論"]}</p>
+    <p>🎨 主色預覽：
+      <span style="display:inline-block;width:30px;height:30px;border-radius:5px;border:1px solid #333;background-color:rgb(${rgb[0]},${rgb[1]},${rgb[2]});"></span>
+      <span style="margin-left:10px;font-size:0.9rem;color:#555;">RGB(${rgb[0]}, ${rgb[1]}, ${rgb[2]})</span>
+    </p>
+  `;
+})
+
         .catch(err => {
           alert("❌ 上傳失敗：" + err.message);
         });
