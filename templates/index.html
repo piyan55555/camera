@@ -26,7 +26,6 @@
     <button id="historyBtn">查看歷史照片</button>
   </div>
 
-  <!-- 顯示分析結果 -->
   <div id="result"></div>
 
   <script>
@@ -37,9 +36,9 @@
     const historyBtn = document.getElementById("historyBtn");
     const patientInput = document.getElementById("patientId");
     const result = document.getElementById("result");
-
     let snapshotBlob = null;
 
+    // 啟動相機
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
       .then(stream => {
         video.srcObject = stream;
@@ -49,6 +48,37 @@
         alert("❌ 鏡頭啟動失敗：" + err.message);
       });
 
+    // 畫五區區塊
+    function drawTongueZones(ctx, leftX, topY, rightX, bottomY) {
+      const w = rightX - leftX;
+      const h = bottomY - topY;
+      const zonePolygons = {
+        1: [[leftX + w * 0.35, topY + h * 0.75], [leftX + w * 0.65, topY + h * 0.75], [leftX + w * 0.55, bottomY], [leftX + w * 0.45, bottomY]],
+        2: [[leftX + w * 0.1, topY + h * 0.35], [leftX + w * 0.25, topY + h * 0.35], [leftX + w * 0.25, topY + h * 0.7], [leftX + w * 0.15, topY + h * 0.7]],
+        3: [[leftX + w * 0.35, topY + h * 0.25], [leftX + w * 0.65, topY + h * 0.25], [leftX + w * 0.65, topY + h * 0.7], [leftX + w * 0.35, topY + h * 0.7]],
+        4: [[leftX + w * 0.75, topY + h * 0.35], [leftX + w * 0.9, topY + h * 0.35], [leftX + w * 0.85, topY + h * 0.7], [leftX + w * 0.75, topY + h * 0.7]],
+        5: [[leftX + w * 0.25, topY], [leftX + w * 0.75, topY], [leftX + w * 0.75, topY + h * 0.25], [leftX + w * 0.25, topY + h * 0.25]]
+      };
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 2;
+      for (const zone in zonePolygons) {
+        const poly = zonePolygons[zone];
+        ctx.beginPath();
+        ctx.moveTo(poly[0][0], poly[0][1]);
+        for (let i = 1; i < poly.length; i++) {
+          ctx.lineTo(poly[i][0], poly[i][1]);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        const labelX = poly.reduce((sum, p) => sum + p[0], 0) / poly.length;
+        const labelY = poly.reduce((sum, p) => sum + p[1], 0) / poly.length;
+        ctx.fillStyle = "black";
+        ctx.font = "16px sans-serif";
+        ctx.fillText(zone, labelX - 5, labelY + 5);
+      }
+    }
+
+    // 畫舌頭輪廓與五區
     function drawOverlay() {
       const ctx = canvas.getContext("2d");
       canvas.width = video.videoWidth;
@@ -74,39 +104,10 @@
       ctx.lineWidth = 3;
       ctx.stroke();
 
-      function drawTongueZones(ctx, leftX, topY, rightX, bottomY) {
-  const w = rightX - leftX;
-  const h = bottomY - topY;
-
-  const zonePolygons = {
-    1: [[leftX + w * 0.35, topY + h * 0.75], [leftX + w * 0.65, topY + h * 0.75], [leftX + w * 0.55, bottomY], [leftX + w * 0.45, bottomY]],
-    2: [[leftX + w * 0.1, topY + h * 0.35], [leftX + w * 0.25, topY + h * 0.35], [leftX + w * 0.25, topY + h * 0.7], [leftX + w * 0.15, topY + h * 0.7]],
-    3: [[leftX + w * 0.35, topY + h * 0.25], [leftX + w * 0.65, topY + h * 0.25], [leftX + w * 0.65, topY + h * 0.7], [leftX + w * 0.35, topY + h * 0.7]],
-    4: [[leftX + w * 0.75, topY + h * 0.35], [leftX + w * 0.9, topY + h * 0.35], [leftX + w * 0.85, topY + h * 0.7], [leftX + w * 0.75, topY + h * 0.7]],
-    5: [[leftX + w * 0.25, topY], [leftX + w * 0.75, topY], [leftX + w * 0.75, topY + h * 0.25], [leftX + w * 0.25, topY + h * 0.25]]
-  };
-
-  ctx.strokeStyle = "red";
-  ctx.lineWidth = 2;
-  for (const zone in zonePolygons) {
-    const poly = zonePolygons[zone];
-    ctx.beginPath();
-    ctx.moveTo(poly[0][0], poly[0][1]);
-    for (let i = 1; i < poly.length; i++) {
-      ctx.lineTo(poly[i][0], poly[i][1]);
+      drawTongueZones(ctx, leftX, topY + 20, rightX, bottomY);
     }
-    ctx.closePath();
-    ctx.stroke();
 
-    const labelX = poly.reduce((sum, p) => sum + p[0], 0) / poly.length;
-    const labelY = poly.reduce((sum, p) => sum + p[1], 0) / poly.length;
-    ctx.fillStyle = "black";
-    ctx.font = "16px sans-serif";
-    ctx.fillText(zone, labelX - 5, labelY + 5);
-  }
-}
-
-
+    // 拍照功能
     captureBtn.addEventListener("click", () => {
       const snap = document.createElement("canvas");
       snap.width = video.videoWidth;
@@ -120,6 +121,7 @@
       }, "image/jpeg");
     });
 
+    // 上傳功能
     uploadBtn.addEventListener("click", () => {
       const patientId = patientInput.value.trim();
       if (!snapshotBlob) return alert("請先拍照！");
@@ -131,24 +133,24 @@
 
       fetch("/upload", { method: "POST", body: formData })
         .then(res => res.json())
-    .then(data => {
-  const rgb = data["主色RGB"];
-  result.innerHTML = `
-    <p>✅ 上傳成功：<strong>${data.filename}</strong></p>
-    <p>🔍 舌苔主色：<strong>${data["舌苔主色"]}</strong></p>
-    <p>🧠 中醫推論：${data["中醫推論"]}</p>
-    <p>🎨 主色預覽：
-      <span style="display:inline-block;width:30px;height:30px;border-radius:5px;border:1px solid #333;background-color:rgb(${rgb[0]},${rgb[1]},${rgb[2]});"></span>
-      <span style="margin-left:10px;font-size:0.9rem;color:#555;">RGB(${rgb[0]}, ${rgb[1]}, ${rgb[2]})</span>
-    </p>
-  `;
-})
-
+        .then(data => {
+          const rgb = data["主色RGB"];
+          result.innerHTML = `
+            <p>✅ 上傳成功：<strong>${data.filename}</strong></p>
+            <p>🔍 舌苔主色：<strong>${data["舌苔主色"]}</strong></p>
+            <p>🧠 中醫推論：${data["中醫推論"]}</p>
+            <p>🎨 主色預覽：
+              <span style="display:inline-block;width:30px;height:30px;border-radius:5px;border:1px solid #333;background-color:rgb(${rgb[0]},${rgb[1]},${rgb[2]});"></span>
+              <span style="margin-left:10px;font-size:0.9rem;color:#555;">RGB(${rgb[0]}, ${rgb[1]}, ${rgb[2]})</span>
+            </p>
+          `;
+        })
         .catch(err => {
           alert("❌ 上傳失敗：" + err.message);
         });
     });
 
+    // 跳轉歷史頁
     historyBtn.addEventListener("click", () => {
       const patientId = patientInput.value.trim();
       if (!patientId) return alert("請先輸入病患 ID");
