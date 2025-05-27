@@ -20,12 +20,11 @@
     <canvas id="overlay"></canvas>
   </div>
   <div>
-    <button id="captureBtn">拍照</button>
+    <button id="captureBtn">📸 拍照</button>
     <input id="patientId" placeholder="請輸入病患 ID" />
-    <button id="uploadBtn">上傳圖片</button>
-    <button id="historyBtn">查看歷史照片</button>
+    <button id="uploadBtn">📤 上傳圖片</button>
+    <button id="historyBtn">📚 查看歷史照片</button>
   </div>
-
   <div id="result"></div>
 
   <script>
@@ -48,7 +47,7 @@
         alert("❌ 鏡頭啟動失敗：" + err.message);
       });
 
-    // 畫五區區塊
+    // 畫五區區塊（矩形方式）
     function drawTongueZones(ctx, leftX, topY, rightX, bottomY) {
       const w = rightX - leftX;
       const h = bottomY - topY;
@@ -107,7 +106,7 @@
       drawTongueZones(ctx, leftX, topY + 20, rightX, bottomY);
     }
 
-    // 拍照功能
+    // 拍照
     captureBtn.addEventListener("click", () => {
       const snap = document.createElement("canvas");
       snap.width = video.videoWidth;
@@ -121,7 +120,7 @@
       }, "image/jpeg");
     });
 
-    // 上傳功能
+    // 上傳
     uploadBtn.addEventListener("click", () => {
       const patientId = patientInput.value.trim();
       if (!snapshotBlob) return alert("請先拍照！");
@@ -150,7 +149,7 @@
         });
     });
 
-    // 跳轉歷史頁
+    // 查看歷史
     historyBtn.addEventListener("click", () => {
       const patientId = patientInput.value.trim();
       if (!patientId) return alert("請先輸入病患 ID");
