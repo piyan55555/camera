@@ -1,35 +1,34 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
 import datetime
-from color_analysis import analyze_image_color  # 引入顏色分析模組（含中心區分析）
+from color_analysis import analyze_image_color, analyze_five_zones  # ✅ 新增五區分析模組
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# 首頁（上傳與辨識）
+# 首頁
 @app.route("/")
 def home():
     return render_template("index.html")
 
-# 歷史頁面（可擴充用）
+# 歷史頁面
 @app.route("/history")
 def history():
     return render_template("history.html")
 
-# 上傳圖片並辨識顏色
+# 上傳圖片並進行五區診斷與主色分析
 @app.route("/upload", methods=["POST"])
 def upload_image():
     if 'image' not in request.files:
         return "No image uploaded", 400
     image = request.files['image']
 
-    # 病人 ID（必要欄位）
     patient_id = request.form.get('patient_id', '').strip()
     if not patient_id:
         return "Missing patient ID", 400
 
-    # 儲存圖片到 uploads/病人ID/目標圖檔.jpg
+    # 建立資料夾並儲存圖片
     patient_folder = os.path.join(UPLOAD_FOLDER, patient_id)
     os.makedirs(patient_folder, exist_ok=True)
 
@@ -38,18 +37,22 @@ def upload_image():
     filepath = os.path.join(patient_folder, filename)
     image.save(filepath)
 
-    # 舌苔顏色分析（中心區平均 + RGB）
+    # 分析主色（中央區域）
     main_color, comment, rgb = analyze_image_color(filepath)
 
-    # 回傳分析結果
+    # 分析五區診斷
+    five_zone_result = analyze_five_zones(filepath)
+
+    # 回傳完整分析結果
     return jsonify({
         "filename": filename,
+        "主色RGB": rgb,
         "舌苔主色": main_color,
         "中醫推論": comment,
-        "主色RGB": rgb
+        "五區診斷": five_zone_result
     })
 
-# 取得特定病人照片清單
+# 列出某病人所有照片
 @app.route("/photos", methods=["GET"])
 def list_photos():
     patient_id = request.args.get("patient", "").strip()
@@ -62,13 +65,13 @@ def list_photos():
     urls = [f"/uploads/{patient_id}/{fname}" for fname in files]
     return jsonify(urls)
 
-# 提供圖片讀取
+# 提供上傳圖片
 @app.route("/uploads/<patient>/<filename>")
 def uploaded_file(patient, filename):
     folder = os.path.join(UPLOAD_FOLDER, patient)
     return send_from_directory(folder, filename)
 
-# 提供所有病人清單（資料夾）
+# 所有病人清單
 @app.route("/patients", methods=["GET"])
 def list_patients():
     try:
@@ -80,7 +83,7 @@ def list_patients():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 啟動應用程式（Render 用）
+# 啟動應用程式（本機 or Render）
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
