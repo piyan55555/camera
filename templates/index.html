@@ -51,13 +51,12 @@
         alert("❌ 鏡頭啟動失敗：" + err.message);
       });
 
-    // OpenCV 載入完成回呼
     function onOpenCvReady() {
       console.log('OpenCV.js 已載入');
       requestAnimationFrame(drawOverlay);
     }
 
-    // 使用 OpenCV.js 偵測舌頭輪廓並繪製
+    // 使用 OpenCV.js 偵測舌頭並畫出邊界框
     function drawOverlay() {
       if (typeof cv === 'undefined' || video.videoWidth === 0) {
         return requestAnimationFrame(drawOverlay);
@@ -67,11 +66,11 @@
       tmp.width = video.videoWidth; tmp.height = video.videoHeight;
       const tctx = tmp.getContext('2d');
       tctx.drawImage(video, 0, 0);
-      // 讀取到 mat
+      // 讀入 mat
       let src = cv.imread(tmp);
       let hsv = new cv.Mat();
       cv.cvtColor(src, hsv, cv.COLOR_RGB2HSV);
-      // 定義粉紅色區間 (HSV)
+      // 粉紅色閥值 (HSV)
       let low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [150,50,50,0]);
       let high= new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180,255,255,255]);
       let mask = new cv.Mat();
@@ -83,33 +82,29 @@
       let contours = new cv.MatVector();
       let hier = new cv.Mat();
       cv.findContours(mask, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-      // 取最大輪廓
-      let maxIdx=0, maxA=0;
-      for (let i=0; i<contours.size(); i++) {
-        let a = cv.contourArea(contours.get(i));
-        if (a > maxA) { maxA = a; maxIdx = i; }
+      // 找最大輪廓的 bounding box
+      let rect = null;
+      if (contours.size() > 0) {
+        let maxIdx = 0, maxA = 0;
+        for (let i = 0; i < contours.size(); i++) {
+          let a = cv.contourArea(contours.get(i));
+          if (a > maxA) { maxA = a; maxIdx = i; }
+        }
+        rect = cv.boundingRect(contours.get(maxIdx));
       }
-      let cnt = contours.size()>0 ? contours.get(maxIdx) : null;
-      let approx = new cv.Mat();
-      if (cnt) cv.approxPolyDP(cnt, approx, 5, true);
-      // 繪製到 overlay
+      // 繪製
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      if (cnt) {
+      if (rect) {
         ctx.strokeStyle = '#ff69b4'; ctx.lineWidth = 4;
-        ctx.beginPath();
-        for (let i=0; i<approx.rows; i++) {
-          let x = approx.intAt(i,0), y = approx.intAt(i,1);
-          i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-        }
-        ctx.closePath(); ctx.stroke();
+        ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
       }
-      // 釋放資源
+      // 釋放
       src.delete(); hsv.delete(); low.delete(); high.delete(); mask.delete();
-      M.delete(); contours.delete(); hier.delete(); approx.delete();
-      // 持續繪製
+      M.delete(); contours.delete(); hier.delete();
+      // 持續更新
       requestAnimationFrame(drawOverlay);
     }
 
@@ -127,16 +122,14 @@
       }, "image/jpeg");
     });
 
-    // 上傳並顯示五區診斷
+    // 上傳
     uploadBtn.addEventListener("click", () => {
       const patientId = patientInput.value.trim();
       if (!snapshotBlob) return alert("請先拍照！");
       if (!patientId) return alert("請輸入病患 ID");
-
       const formData = new FormData();
       formData.append("image", snapshotBlob);
       formData.append("patient_id", patientId);
-
       fetch("/upload", { method: "POST", body: formData })
         .then(res => res.json())
         .then(data => {
@@ -165,12 +158,10 @@
           }
           result.innerHTML = html;
         })
-        .catch(err => {
-          alert("❌ 上傳失敗：" + err.message);
-        });
+        .catch(err => alert("❌ 上傳失敗："+err.message));
     });
 
-    // 查看歷史照片
+    // 歷史
     historyBtn.addEventListener("click", () => {
       const patientId = patientInput.value.trim();
       if (!patientId) return alert("請先輸入病患 ID");
