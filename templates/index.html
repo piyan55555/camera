@@ -15,6 +15,8 @@
     th, td { border: 1px solid #ccc; padding: 0.5rem; font-size: 0.95rem; }
     th { background-color: #f9f9f9; }
   </style>
+  <!-- 引入 OpenCV.js -->
+  <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onOpenCvReady();"></script>
 </head>
 <body>
   <h2>舌苔辨識相機</h2>
@@ -44,68 +46,71 @@
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
       .then(stream => {
         video.srcObject = stream;
-        video.onloadeddata = drawOverlay;
       })
       .catch(err => {
         alert("❌ 鏡頭啟動失敗：" + err.message);
       });
 
-    // 舌頭輪廓與五區
-    function drawOverlay() {
-      const ctx = canvas.getContext("2d");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height * 0.65;
-      const tongueWidth = canvas.width * 0.35;
-      const tongueHeight = canvas.height * 0.5;
-      const leftX = centerX - tongueWidth / 2;
-      const rightX = centerX + tongueWidth / 2;
-      const topY = centerY - tongueHeight / 2;
-      const bottomY = centerY + tongueHeight / 2;
-
-      ctx.beginPath();
-      ctx.moveTo(leftX, topY + 20);
-      ctx.bezierCurveTo(leftX, centerY, centerX - tongueWidth * 0.2, bottomY, centerX, bottomY);
-      ctx.bezierCurveTo(centerX + tongueWidth * 0.2, bottomY, rightX, centerY, rightX, topY + 20);
-      ctx.bezierCurveTo(rightX, topY - 15, leftX, topY - 15, leftX, topY + 20);
-      ctx.closePath();
-      ctx.strokeStyle = "#ff69b4";
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      drawTongueZones(ctx, leftX, topY + 20, rightX, bottomY);
+    // OpenCV 載入完成回呼
+    function onOpenCvReady() {
+      console.log('OpenCV.js 已載入');
+      requestAnimationFrame(drawOverlay);
     }
 
-    function drawTongueZones(ctx, leftX, topY, rightX, bottomY) {
-      const w = rightX - leftX;
-      const h = bottomY - topY;
-      const zonePolygons = {
-        1: [[leftX + w * 0.35, topY + h * 0.75], [leftX + w * 0.65, topY + h * 0.75], [leftX + w * 0.55, bottomY], [leftX + w * 0.45, bottomY]],
-        2: [[leftX + w * 0.1, topY + h * 0.35], [leftX + w * 0.25, topY + h * 0.35], [leftX + w * 0.25, topY + h * 0.7], [leftX + w * 0.15, topY + h * 0.7]],
-        3: [[leftX + w * 0.35, topY + h * 0.25], [leftX + w * 0.65, topY + h * 0.25], [leftX + w * 0.65, topY + h * 0.7], [leftX + w * 0.35, topY + h * 0.7]],
-        4: [[leftX + w * 0.75, topY + h * 0.35], [leftX + w * 0.9, topY + h * 0.35], [leftX + w * 0.85, topY + h * 0.7], [leftX + w * 0.75, topY + h * 0.7]],
-        5: [[leftX + w * 0.25, topY], [leftX + w * 0.75, topY], [leftX + w * 0.75, topY + h * 0.25], [leftX + w * 0.25, topY + h * 0.25]]
-      };
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 2;
-      for (const zone in zonePolygons) {
-        const poly = zonePolygons[zone];
-        ctx.beginPath();
-        ctx.moveTo(poly[0][0], poly[0][1]);
-        for (let i = 1; i < poly.length; i++) {
-          ctx.lineTo(poly[i][0], poly[i][1]);
-        }
-        ctx.closePath();
-        ctx.stroke();
-        const labelX = poly.reduce((sum, p) => sum + p[0], 0) / poly.length;
-        const labelY = poly.reduce((sum, p) => sum + p[1], 0) / poly.length;
-        ctx.fillStyle = "black";
-        ctx.font = "16px sans-serif";
-        ctx.fillText(zone, labelX - 5, labelY + 5);
+    // 使用 OpenCV.js 偵測舌頭輪廓並繪製
+    function drawOverlay() {
+      if (typeof cv === 'undefined' || video.videoWidth === 0) {
+        return requestAnimationFrame(drawOverlay);
       }
+      // 臨時 canvas
+      const tmp = document.createElement('canvas');
+      tmp.width = video.videoWidth; tmp.height = video.videoHeight;
+      const tctx = tmp.getContext('2d');
+      tctx.drawImage(video, 0, 0);
+      // 讀取到 mat
+      let src = cv.imread(tmp);
+      let hsv = new cv.Mat();
+      cv.cvtColor(src, hsv, cv.COLOR_RGB2HSV);
+      // 定義粉紅色區間 (HSV)
+      let low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [150,50,50,0]);
+      let high= new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180,255,255,255]);
+      let mask = new cv.Mat();
+      cv.inRange(hsv, low, high, mask);
+      // 形態學去噪
+      let M = cv.Mat.ones(5,5,cv.CV_8U);
+      cv.morphologyEx(mask, mask, cv.MORPH_OPEN, M);
+      // 找輪廓
+      let contours = new cv.MatVector();
+      let hier = new cv.Mat();
+      cv.findContours(mask, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      // 取最大輪廓
+      let maxIdx=0, maxA=0;
+      for (let i=0; i<contours.size(); i++) {
+        let a = cv.contourArea(contours.get(i));
+        if (a > maxA) { maxA = a; maxIdx = i; }
+      }
+      let cnt = contours.size()>0 ? contours.get(maxIdx) : null;
+      let approx = new cv.Mat();
+      if (cnt) cv.approxPolyDP(cnt, approx, 5, true);
+      // 繪製到 overlay
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if (cnt) {
+        ctx.strokeStyle = '#ff69b4'; ctx.lineWidth = 4;
+        ctx.beginPath();
+        for (let i=0; i<approx.rows; i++) {
+          let x = approx.intAt(i,0), y = approx.intAt(i,1);
+          i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+        }
+        ctx.closePath(); ctx.stroke();
+      }
+      // 釋放資源
+      src.delete(); hsv.delete(); low.delete(); high.delete(); mask.delete();
+      M.delete(); contours.delete(); hier.delete(); approx.delete();
+      // 持續繪製
+      requestAnimationFrame(drawOverlay);
     }
 
     // 拍照
@@ -145,7 +150,6 @@
               <span style="margin-left:10px;font-size:0.9rem;color:#555;">RGB(${rgb[0]}, ${rgb[1]}, ${rgb[2]})</span>
             </p>
           `;
-
           if (data["五區診斷"]) {
             html += `<h3>🗺️ 五區診斷：</h3><table><tr><th>區域</th><th>顏色</th><th>RGB</th><th>中醫推論</th></tr>`;
             for (const zone in data["五區診斷"]) {
@@ -159,7 +163,6 @@
             }
             html += `</table>`;
           }
-
           result.innerHTML = html;
         })
         .catch(err => {
@@ -167,6 +170,7 @@
         });
     });
 
+    // 查看歷史照片
     historyBtn.addEventListener("click", () => {
       const patientId = patientInput.value.trim();
       if (!patientId) return alert("請先輸入病患 ID");
