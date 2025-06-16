@@ -39,16 +39,16 @@ def upload_image():
     image.save(filepath)
 
     # 分析主色（中央區域）
-five_zone_result = analyze_five_zones(filepath)
+    five_zone_result = analyze_five_zones(filepath)
 
-# 從五區中選出一個代表主色（例如舌中 / 脾胃區）
-main_zone = "脾胃"
-main_info = five_zone_result.get(main_zone, {})
-main_color = main_info.get("顏色", "未知")
-comment = main_info.get("推論", "無法判斷")
-rgb = main_info.get("RGB", [0, 0, 0])
+    # 從五區中選出一個代表主色（例如舌中 / 脾胃區）
+    main_zone = "脾胃"
+    main_info = five_zone_result.get(main_zone, {})
+    main_color = main_info.get("顏色", "未知")
+    comment = main_info.get("推論", "無法判斷")
+    rgb = main_info.get("RGB", [0, 0, 0])
 
-  return jsonify({
+    return jsonify({
         "filename": filename,
         "主色RGB": rgb,
         "舌苔主色": main_color,
