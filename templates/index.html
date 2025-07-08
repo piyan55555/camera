@@ -1,109 +1,203 @@
-<script>
-window.onload = () => {
-  const video = document.getElementById("camera");
-  const canvas = document.getElementById("overlay");
-  const captureBtn = document.getElementById("captureBtn");
-  const uploadBtn = document.getElementById("uploadBtn");
-  const historyBtn = document.getElementById("historyBtn");
-  const patientInput = document.getElementById("patientId");
-  const result = document.getElementById("result");
-  let snapshotBlob = null;
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>舌苔辨識相機</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; text-align: center; background: #f0f0f0; }
+    #videoWrapper { position: relative; width: 100%; max-width: 500px; margin: auto; }
+    video, canvas { width: 100%; border-radius: 10px; margin-top: 1rem; }
+    canvas { position: absolute; top: 1rem; left: 0; pointer-events: none; z-index: 10; }
+    button, input { margin: 1rem 0.5rem; padding: 0.6rem 1rem; font-size: 1.2rem; }
+    #result { background: #fff; margin: 1rem auto; max-width: 500px; padding: 1rem; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; font-size: 0.95rem; }
+    th { background-color: #f9f9f9; }
+  </style>
+  <!-- 引入 OpenCV.js -->
+  <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onOpenCvReady();"></script>
+</head>
+<body>
+  <h2>舌苔辨識相機</h2>
+  <div id="videoWrapper">
+    <video id="camera" autoplay playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
+  <div>
+    <button id="captureBtn">📸 拍照</button>
+    <input id="patientId" placeholder="請輸入病患 ID" />
+    <button id="uploadBtn">📤 上傳圖片</button>
+    <button id="historyBtn">📚 查看歷史照片</button>
+  </div>
+  <div id="result"></div>
 
-  // ✅ 啟動相機（移除 exact 提升相容性）
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-    .then(stream => { video.srcObject = stream; })
-    .catch(err => { alert("❌ 鏡頭啟動失敗：" + err.message); });
+  <script>
+    const video = document.getElementById("camera");
+    const canvas = document.getElementById("overlay");
+    const captureBtn = document.getElementById("captureBtn");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const historyBtn = document.getElementById("historyBtn");
+    const patientInput = document.getElementById("patientId");
+    const result = document.getElementById("result");
+    let snapshotBlob = null;
 
-  function onOpenCvReady() { requestAnimationFrame(drawOverlay); }
+    // 啟動相機
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => { alert("❌ 鏡頭啟動失敗：" + err.message); });
 
-  function drawOverlay() {
-    if (typeof cv === 'undefined' || video.videoWidth === 0) {
-      return requestAnimationFrame(drawOverlay);
+    function onOpenCvReady() {
+      requestAnimationFrame(drawOverlay);
     }
 
-    const tmp = document.createElement('canvas');
-    tmp.width = video.videoWidth; tmp.height = video.videoHeight;
-    tmp.getContext('2d').drawImage(video, 0, 0);
-
-    let src = cv.imread(tmp);
-    let hsv = new cv.Mat(); cv.cvtColor(src, hsv, cv.COLOR_RGB2HSV);
-
-    // 🎯 調整 HSV 範圍為粉紅舌色
-    let low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [160, 30, 80, 0]);
-    let high= new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180, 150, 255, 255]);
-
-    let mask = new cv.Mat(); cv.inRange(hsv, low, high, mask);
-    let M = cv.Mat.ones(5,5,cv.CV_8U); cv.morphologyEx(mask, mask, cv.MORPH_OPEN, M);
-    let contours = new cv.MatVector(), hier = new cv.Mat();
-    cv.findContours(mask, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-    let cnt = null;
-    if (contours.size() > 0) {
-      let maxIdx = 0, maxA = 0;
-      for (let i = 0; i < contours.size(); i++) {
-        let a = cv.contourArea(contours.get(i));
-        if (a > maxA) { maxA = a; maxIdx = i; }
+    function drawOverlay() {
+      if (typeof cv === 'undefined' || video.videoWidth === 0) {
+        return requestAnimationFrame(drawOverlay);
       }
-      // ✅ 加入面積門檻（畫面 5%）
-      if (maxA > video.videoWidth * video.videoHeight * 0.05) {
+      // 臨時 canvas 讀取影格
+      const tmp = document.createElement('canvas');
+      tmp.width = video.videoWidth; tmp.height = video.videoHeight;
+      tmp.getContext('2d').drawImage(video, 0, 0);
+      
+      // OpenCV 處理
+
+      let src = cv.imread(tmp);
+      let hsv = new cv.Mat(); cv.cvtColor(src, hsv, cv.COLOR_RGB2HSV);
+      let low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [150,50,50,0]);
+      let high = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [180,255,255,255]);
+      let mask = new cv.Mat(); cv.inRange(hsv, low, high, mask);
+      let M = cv.Mat.ones(5,5,cv.CV_8U); cv.morphologyEx(mask, mask, cv.MORPH_OPEN, M);
+      let contours = new cv.MatVector(), hier = new cv.Mat();
+      cv.findContours(mask, contours, hier, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      // 找最大輪廓
+      let cnt = null;
+      if (contours.size() > 0) {
+        let maxIdx = 0, maxA = 0;
+        for (let i = 0; i < contours.size(); i++) {
+          let a = cv.contourArea(contours.get(i));
+          if (a > maxA) { maxA = a; maxIdx = i; }
+        }
         cnt = contours.get(maxIdx);
       }
-    }
 
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
+      // 畫輪廓及五區
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    if (cnt) {
-      let approx = new cv.Mat(); cv.approxPolyDP(cnt, approx, 3, true);
-      ctx.strokeStyle = '#ff69b4'; ctx.lineWidth = 4;
-      ctx.beginPath();
-      for (let i = 0; i < approx.rows; i++) {
-        const x = approx.intAt(i,0), y = approx.intAt(i,1);
-        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-      }
-      ctx.closePath(); ctx.stroke(); approx.delete();
-
-      const r = cv.boundingRect(cnt);
-      const [zx, zy, zw, zh] = [r.x, r.y, r.width, r.height];
-      const zones = {
-        '舌尖（心肺）': [[0.35,0.75],[0.65,0.75],[0.55,0.95],[0.45,0.95]],
-        '舌邊（肝膽）左': [[0.1,0.35],[0.25,0.35],[0.25,0.7],[0.15,0.7]],
-        '舌中（脾胃）': [[0.35,0.25],[0.65,0.25],[0.65,0.7],[0.35,0.7]],
-        '舌邊（肝膽）右': [[0.75,0.35],[0.9,0.35],[0.85,0.7],[0.75,0.7]],
-        '舌根（腎）': [[0.25,0.0],[0.75,0.0],[0.75,0.25],[0.25,0.25]]
-      };
-      ctx.strokeStyle = 'red'; ctx.lineWidth = 2;
-      ctx.font = '16px sans-serif'; ctx.fillStyle = '#000';
-      Object.entries(zones).forEach(([name, rel]) => {
+      if (cnt) {
+        // 舌緣輪廓
+        let approx = new cv.Mat(); cv.approxPolyDP(cnt, approx, 3, true);
+        ctx.strokeStyle = '#ff69b4'; ctx.lineWidth = 4;
         ctx.beginPath();
-        rel.forEach((pt,i) => {
-          const x = Math.min(zx + zw * pt[0], video.videoWidth - 1);
-          const y = Math.min(zy + zh * pt[1], video.videoHeight - 1);
+        for (let i = 0; i < approx.rows; i++) {
+          const x = approx.intAt(i,0), y = approx.intAt(i,1);
           i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+        }
+        ctx.closePath(); ctx.stroke(); approx.delete();
+
+        // 定義並畫五區
+        const r = cv.boundingRect(cnt);
+        const [zx, zy, zw, zh] = [r.x, r.y, r.width, r.height];
+        const zones = {
+          '舌尖（心肺）': [[0.35,0.75],[0.65,0.75],[0.55,1.0],[0.45,1.0]],
+          '舌邊（肝膽）左': [[0.1,0.35],[0.25,0.35],[0.25,0.7],[0.15,0.7]],
+          '舌中（脾胃）': [[0.35,0.25],[0.65,0.25],[0.65,0.7],[0.35,0.7]],
+          '舌邊（肝膽）右': [[0.75,0.35],[0.9,0.35],[0.85,0.7],[0.75,0.7]],
+          '舌根（腎）': [[0.25,0.0],[0.75,0.0],[0.75,0.25],[0.25,0.25]]
+        };
+        ctx.strokeStyle = 'red'; ctx.lineWidth = 2;
+        ctx.fillStyle = 'transparent';
+        ctx.font = '16px sans-serif'; ctx.fillStyle = '#000';
+        Object.entries(zones).forEach(([name, rel]) => {
+          ctx.beginPath();
+          rel.forEach((pt,i) => {
+            const x = zx + zw * pt[0];
+            const y = zy + zh * pt[1];
+            i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+          });
+          ctx.closePath(); ctx.stroke();
+          // 標籤
+          const cx = rel.reduce((s,p)=>s+(zx+zw*p[0]),0)/4;
+          const cy = rel.reduce((s,p)=>s+(zy+zh*p[1]),0)/4;
+          ctx.fillText(name, cx - ctx.measureText(name).width/2, cy + 5);
         });
-        ctx.closePath(); ctx.stroke();
-        const cx = rel.reduce((s,p)=>s+Math.min(zx+zw*p[0], video.videoWidth - 1),0)/4;
-        const cy = rel.reduce((s,p)=>s+Math.min(zy+zh*p[1], video.videoHeight - 1),0)/4;
-        ctx.fillText(name, cx - ctx.measureText(name).width/2, cy + 5);
-      });
-    } else {
-      // ⚠️ 無法辨識舌頭提示
-      ctx.font = '20px sans-serif';
-      ctx.fillStyle = 'red';
-      ctx.fillText('⚠️ 無法辨識舌頭，請重新拍攝', 20, 50);
+      }
+
+      // 清理
+      src.delete(); hsv.delete(); low.delete(); high.delete(); mask.delete(); M.delete(); contours.delete(); hier.delete();
+      requestAnimationFrame(drawOverlay);
     }
 
-    src.delete(); hsv.delete(); low.delete(); high.delete(); mask.delete(); M.delete(); contours.delete(); hier.delete();
-    requestAnimationFrame(drawOverlay);
-  }
+    // 拍照
+    captureBtn.addEventListener('click', () => {
+      const snap = document.createElement('canvas');
+      snap.width = video.videoWidth; snap.height = video.videoHeight;
+      const c = snap.getContext('2d'); c.drawImage(video,0,0); c.drawImage(canvas,0,0);
+      snap.toBlob(b => { snapshotBlob = b; alert('📸 拍照完成！'); }, 'image/jpeg');
+    });
 
-  captureBtn.addEventListener('click', () => {
-    const snap = document.createElement('canvas');
-    snap.width = video.videoWidth; snap.height = video.videoHeight;
-    const c = snap.getContext('2d'); c.drawImage(video,0,0); c.drawImage(canvas,0,0);
-    snap.toBlob(b => { snapshotBlob = b; alert('📸 拍照完成！'); }, 'image/jpeg');
-  });
+    // 上傳並顯示結果
+    uploadBtn.addEventListener('click', () => {
+      const pid = patientInput.value.trim();
+      if (!snapshotBlob) return alert('請先拍照！');
+      if (!pid) return alert('請輸入病患 ID');
+      const fd = new FormData(); fd.append('image', snapshotBlob); fd.append('patient_id', pid);
+      fetch('/upload', { method:'POST', body:fd })
+        .then(r=>r.json()).then(data=>{
+          const rgb=data['主色RGB'];
+          let html = `<p>✅ 上傳成功：<strong>${data.filename}</strong></p>`+
+                     `<p>🔍 舌苔主色：<strong>${data['舌苔主色']}</strong> RGB(${rgb.join(', ')})</p>`+
+                     `<p>🧠 中醫推論：${data['中醫推論']}</p>`;
+          if(data['五區診斷']){
+            html += '<h3>🗺️ 五區診斷：</h3><table><tr><th>區域</th><th>顏色</th><th>RGB</th><th>推論</th></tr>';
+            Object.entries(data['五區診斷']).forEach(([zone,info])=>{
+              html += `<tr><td>${zone}</td><td>${info['顏色']}</td><td>(${info['RGB'].join(', ')})</td><td>${info['推論']}</td></tr>`;
+        .then(r => r.json()).then(data => {
+          const rgb = data['主色RGB'];
+          let html = `
+            <p>✅ 上傳成功：<strong>${data.filename}</strong></p>
+            <p>🔍 舌苔主色：<strong>${data['舌苔主色']}</strong>
+              <span style="display:inline-block;width:30px;height:30px;border:1px solid #333;border-radius:4px;background-color:rgb(${rgb.join(',')})"></span>
+              <span style="margin-left:10px;">RGB(${rgb.join(', ')})</span>
+            </p>
+            <p>🧠 中醫推論：${data['中醫推論']}</p>
+          `;
+          if (data['五區診斷']) {
+            html += `<h3>🗺️ 五區診斷：</h3>
+              <table><tr><th>區域</th><th>顏色</th><th>色階</th><th>推論</th></tr>`;
+            Object.entries(data['五區診斷']).forEach(([zone, info]) => {
+              const rgb = info['RGB'];
+              const colorBox = `
+                <div style="width: 40px; height: 20px; background-color: rgb(${rgb.join(',')}); border: 1px solid #000; border-radius: 4px;"></div>
+                <small>RGB(${rgb.join(', ')})</small>
+              `;
+              html += `<tr>
+                <td>${zone}</td>
+                <td>${info['顏色']}</td>
+                <td>${colorBox}</td>
+                <td>${info['推論']}</td>
+              </tr>`;
+            });
+            html += '</table>';
+            html += `</table>`;
+          }
+          result.innerHTML=html;
+        }).catch(e=>alert('❌ 上傳失敗：'+e.message));
+          result.innerHTML = html;
+        }).catch(e => alert('❌ 上傳失敗：' + e.message));
+    });
 
-  // ... uploadBtn, historyBtn 保持原樣
-};
-</script>
+    // 查看歷史照片
+    historyBtn.addEventListener('click',()=>{
+      const pid=patientInput.value.trim(); if(!pid) return alert('請先輸入病患 ID');
+      window.location.href=`/history?patient=${pid}`;
+    historyBtn.addEventListener('click', () => {
+      const pid = patientInput.value.trim();
+      if (!pid) return alert('請先輸入病患 ID');
+      window.location.href = `/history?patient=${pid}`;
+    });
+  </script>
+</body>
+</html>
