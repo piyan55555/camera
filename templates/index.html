@@ -42,10 +42,22 @@
     const result = document.getElementById("result");
     let snapshotBlob = null;
 
-    // 啟動相機
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
-      .then(stream => { video.srcObject = stream; })
-      .catch(err => { alert("❌ 鏡頭啟動失敗：" + err.message); });
+// 安全啟動相機
+function startCamera() {
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+    .then(stream => { video.srcObject = stream; })
+    .catch(() => {
+      // fallback: 嘗試啟動任意鏡頭
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => { video.srcObject = stream; })
+        .catch(err => {
+          alert("❌ 鏡頭啟動失敗：" + err.message);
+        });
+    });
+}
+
+startCamera(); // 頁面一載入就執行
+
 
     function onOpenCvReady() {
       requestAnimationFrame(drawOverlay);
