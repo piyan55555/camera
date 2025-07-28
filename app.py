@@ -1,47 +1,44 @@
-from flask import Flask, request, jsonify, render_template
-from werkzeug.utils import secure_filename
+from flask import Flask, render_template, request
 import os
+from werkzeug.utils import secure_filename
 from color_analysis import analyze_tongue_regions
 
 app = Flask(__name__)
-UPLOAD_FOLDER = "uploads"
+UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-@app.route("/")
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    return render_template("index.html")
+    result = None
+    compare = {}
+    filename = None
+    user_answers = {zone: '' for zone in ["心", "肝", "脾", "肺", "腎"]}
 
-@app.route("/analyze", methods=["POST"])
-def analyze():
-    if 'image' not in request.files:
-        return jsonify({"error": "沒有收到圖片"}), 400
+    if request.method == 'POST':
+        file = request.files['image']
+        if file:
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
 
-    # 儲存上傳圖片
-    file = request.files["image"]
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(filepath)
+            # 取得使用者輸入
+            for zone in user_answers:
+                user_answers[zone] = request.form.get(zone, '')
 
-    # 取得使用者互動答案
-    user_brushed = request.form.get("brushed", "未填")
-    user_observation = request.form.get("self_observation", "未填")
-    kidney_guess = request.form.get("kidney_area", "未填")
-    selected_region = request.form.get("selected_region", "未點選")
+            # 系統分析
+            result = analyze_tongue_regions(file_path)
 
-    try:
-        results = analyze_tongue_regions(filepath)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+            # 比對使用者輸入與系統診斷
+            for zone in result:
+                sys_diag = result[zone]['診斷']
+                user_input = user_answers[zone]
+                if sys_diag in user_input:
+                    compare[zone] = "✅ 判斷一致"
+                else:
+                    compare[zone] = "❌ 可再觀察"
 
-    return jsonify({
-        "使用者回覆": {
-            "是否刷舌": user_brushed,
-            "自覺顏色": user_observation,
-            "腎區域判斷": kidney_guess,
-            "點選異常區": selected_region
-        },
-        "分析結果": results
-    })
+    return render_template('index.html', result=result, compare=compare, filename=filename, user_answers=user_answers)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
