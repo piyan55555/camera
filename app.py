@@ -1,44 +1,49 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify, url_for
 import os
-from werkzeug.utils import secure_filename
-from color_analysis import analyze_tongue_regions
+import uuid
+import json
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    result = None
-    compare = {}
-    filename = None
-    user_answers = {zone: '' for zone in ["心", "肝", "脾", "肺", "腎"]}
+    return render_template('index.html')
 
-    if request.method == 'POST':
-        file = request.files['image']
-        if file:
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
+@app.route('/upload', methods=['POST'])
+def upload():
+    image = request.files.get('image')
+    user_answers = request.form.get('user_answers')
+    user_summary = request.form.get('user_summary')
 
-            # 取得使用者輸入
-            for zone in user_answers:
-                user_answers[zone] = request.form.get(zone, '')
+    if not image or not user_answers:
+        return jsonify({"error": "Missing image or answers"}), 400
 
-            # 系統分析
-            result = analyze_tongue_regions(file_path)
+    try:
+        # Save image with unique name
+        filename = f"{uuid.uuid4().hex}.jpg"
+        image_path = os.path.join(UPLOAD_FOLDER, filename)
+        image.save(image_path)
 
-            # 比對使用者輸入與系統診斷
-            for zone in result:
-                sys_diag = result[zone]['診斷']
-                user_input = user_answers[zone]
-                if sys_diag in user_input:
-                    compare[zone] = "✅ 判斷一致"
-                else:
-                    compare[zone] = "❌ 可再觀察"
+        # Parse user's answers
+        answers = json.loads(user_answers)
 
-    return render_template('index.html', result=result, compare=compare, filename=filename, user_answers=user_answers)
+        # Dummy AI logic - replace this with real analysis
+        diagnosis = {
+            "舌苔主色": "紅",
+            "五區分析": {
+                "心": {"區域": "心", "診斷": "偏熱", "理論": "紅苔為熱", "建議": "多喝水"},
+                "肝": {"區域": "肝", "診斷": "偏寒", "理論": "白苔為寒", "建議": "多運動"},
+                "脾": {"區域": "脾", "診斷": "健康", "理論": "健康舌", "建議": "維持飲食"},
+                "肺": {"區域": "肺", "診斷": "虛弱", "理論": "淡白苔", "建議": "增強抵抗力"},
+                "腎": {"區域": "腎", "診斷": "濕熱", "理論": "黃苔", "建議": "清淡飲食"}
+            }
+        }
+        return jsonify(diagnosis)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
