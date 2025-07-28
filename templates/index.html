@@ -1,107 +1,65 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>舌苔五區分析系統</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      line-height: 1.8;
-    }
-    #tongue-map {
-      width: 300px;
-      cursor: pointer;
-      border: 2px solid #ccc;
-      border-radius: 10px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>五區舌診小測驗</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }
+        .zone { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        textarea { width: 100%; height: 60px; }
+        img.preview { max-width: 300px; margin-top: 10px; display: none; }
+    </style>
 </head>
 <body>
-  <h1>舌苔五區分析系統</h1>
+    <h1>五區舌診互動小測驗</h1>
 
-  <form id="upload-form" enctype="multipart/form-data">
-    <h2>互動前測題</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <p>請直接拍照或上傳舌頭圖片並填寫你對五個區域的觀察與判斷：</p>
+        <input type="file" name="image" accept="image/*" capture="environment" onchange="previewImage(event)" required><br><br>
 
-    <h3>1. 你今天早上有刷舌苔嗎？</h3>
-    <label><input type="radio" name="brushed" value="yes" required> 有</label>
-    <label><input type="radio" name="brushed" value="no"> 沒有</label><br><br>
+        <img id="preview" class="preview" src="#" alt="預覽圖片">
 
-    <h3>2. 你覺得舌苔顏色偏向？</h3>
-    <select name="self_observation">
-      <option value="白">白</option>
-      <option value="黃">黃</option>
-      <option value="紅">紅</option>
-      <option value="黑灰">黑灰</option>
-      <option value="不確定">不確定</option>
-    </select><br><br>
+        {% for zone in ["心", "肝", "脾", "肺", "腎"] %}
+            <div class="zone">
+                <strong>{{ zone }} 區：</strong><br>
+                <textarea name="{{ zone }}">{{ user_answers.get(zone, "") }}</textarea>
+            </div>
+        {% endfor %}
 
-    <h3>3. 判斷題：哪個區域代表「腎」？</h3>
-    <label><input type="radio" name="kidney_area" value="舌尖" required> 舌尖</label><br>
-    <label><input type="radio" name="kidney_area" value="舌根"> 舌根</label><br>
-    <label><input type="radio" name="kidney_area" value="舌邊"> 舌邊</label><br><br>
+        <button type="submit">送出分析與對照</button>
+    </form>
 
-    <h3>4. 請點選你覺得舌頭異常的區域：</h3>
-    <img id="tongue-map" src="/static/tongue_map.png" />
-    <p id="selected-region">你點選的區域：<span id="selected-region-text">尚未選擇</span></p>
-    <input type="hidden" name="selected_region" id="selected-region-input" /><br><br>
+    {% if filename %}
+        <hr>
+        <h2>🖼️ 舌頭區域對照圖：</h2>
+        <img src="{{ url_for('static', filename='tongue_map.png') }}" style="width: 300px;">
+    {% endif %}
 
-    <h3>5. 上傳你的舌頭照片：</h3>
-    <input type="file" name="image" required /><br><br>
+    {% if result %}
+        <hr>
+        <h2>🔍 分析結果與比對</h2>
+        {% for zone in result %}
+            <div class="zone">
+                <strong>{{ zone }} 區</strong><br>
+                🧠 <u>你輸入的觀察：</u> {{ user_answers[zone] }}<br>
+                🧪 <u>系統診斷：</u> {{ result[zone]["診斷"] }}<br>
+                ✅ <u>比對結果：</u> {{ compare[zone] }}<br>
+                📖 理論：{{ result[zone]["理論"] }}<br>
+                💡 建議：{{ result[zone]["建議"] }}
+            </div>
+        {% endfor %}
+    {% endif %}
 
-    <button type="submit">提交分析</button>
-  </form>
-
-  <hr>
-  <h2>分析結果</h2>
-  <div id="result"></div>
-
-  <script>
-    // 簡易分區點擊對應
-    document.getElementById('tongue-map').addEventListener('click', function(e) {
-      const rect = this.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      let region = "未知";
-      if (y < 80 && x > 100 && x < 200) region = "心";
-      else if (y >= 80 && y < 150 && x < 100) region = "肝";
-      else if (y >= 80 && y < 150 && x > 200) region = "脾";
-      else if (y < 80 && x < 100) region = "肺";
-      else if (y > 200 && x > 100 && x < 200) region = "腎";
-
-      document.getElementById('selected-region-text').textContent = region;
-      document.getElementById('selected-region-input').value = region;
-    });
-
-    document.getElementById('upload-form').onsubmit = async function (e) {
-      e.preventDefault();
-      const formData = new FormData(this);
-      const res = await fetch('/analyze', {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-
-      const reply = data["使用者回覆"];
-      const result = data["分析結果"];
-
-      let html = `<h3>使用者回覆</h3>
-      <p>是否刷舌苔：${reply.是否刷舌}</p>
-      <p>自覺舌苔顏色：${reply.自覺顏色}</p>
-      <p>你認為腎在：${reply.腎區域判斷}</p>
-      <p>你點選異常區域：${reply.點選異常區}</p>`;
-
-      html += `<hr><h3>舌苔五區分析結果</h3>`;
-      for (let key in result) {
-        html += `<h4>${key}</h4>`;
-        html += `<ul>
-          <li><strong>診斷：</strong>${result[key].診斷}</li>
-          <li><strong>理論：</strong>${result[key].理論}</li>
-          <li><strong>建議：</strong>${result[key].建議}</li>
-        </ul>`;
-      }
-      document.getElementById('result').innerHTML = html;
-    };
-  </script>
+    <script>
+        function previewImage(event) {
+            const reader = new FileReader();
+            reader.onload = function(){
+                const output = document.getElementById('preview');
+                output.src = reader.result;
+                output.style.display = 'block';
+            };
+            reader.readAsDataURL(event.target.files[0]);
+        }
+    </script>
 </body>
 </html>
