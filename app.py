@@ -21,25 +21,40 @@ def upload():
         return jsonify({"error": "Missing image or answers"}), 400
 
     try:
-        # Save image with unique name
+        # 儲存圖片
         filename = f"{uuid.uuid4().hex}.jpg"
         image_path = os.path.join(UPLOAD_FOLDER, filename)
         image.save(image_path)
 
-        # Parse user's answers
+        # 使用者五區觀察答案（由前端選單取得）
         answers = json.loads(user_answers)
 
-        # Dummy AI logic - replace this with real analysis
+        # 模擬的診斷邏輯（未來可改為真實分析）
         diagnosis = {
             "舌苔主色": "紅",
-            "五區分析": {
-                "心": {"區域": "心", "診斷": "偏熱", "理論": "紅苔為熱", "建議": "多喝水"},
-                "肝": {"區域": "肝", "診斷": "偏寒", "理論": "白苔為寒", "建議": "多運動"},
-                "脾": {"區域": "脾", "診斷": "健康", "理論": "健康舌", "建議": "維持飲食"},
-                "肺": {"區域": "肺", "診斷": "虛弱", "理論": "淡白苔", "建議": "增強抵抗力"},
-                "腎": {"區域": "腎", "診斷": "濕熱", "理論": "黃苔", "建議": "清淡飲食"}
-            }
+            "五區分析": {}
         }
+
+        theory_map = {
+            "白苔": ("偏寒", "溫補"),
+            "偏紅": ("內熱", "多喝水"),
+            "偏黃": ("濕熱", "清淡飲食"),
+            "偏紫": ("瘀阻", "促進循環"),
+            "偏黑灰": ("虛寒", "保暖進補")
+        }
+
+        for zone in ["心", "肝", "脾", "肺", "腎"]:
+            answer = answers.get(zone, "未知")
+            theory, advice = theory_map.get(answer, ("未知", "依醫囑調整"))
+            diagnosis["五區分析"][zone] = {
+                "區域": zone,
+                "診斷": answer,
+                "理論": theory,
+                "建議": advice
+            }
+
+        diagnosis["使用者總結"] = user_summary or ""
+
         return jsonify(diagnosis)
 
     except Exception as e:
