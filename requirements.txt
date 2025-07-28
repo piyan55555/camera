@@ -1,4 +1,3 @@
-flask
-pillow
+Flask
+opencv-python
 numpy
-gunicorn
