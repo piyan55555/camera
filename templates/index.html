@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>舌苔辨識互動測驗</title>
+  <title>舌苔辨識相機</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
@@ -13,75 +13,40 @@
     #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; z-index: 10; }
     button { margin: 1rem 0.5rem; padding: 0.6rem 1.2rem; font-size: 1.1rem; border: none; border-radius: 6px; background: #4a90e2; color: white; cursor: pointer; }
     button:hover { background-color: #357ABD; }
-    select, textarea { margin: 0.5rem; padding: 0.4rem; width: 80%; max-width: 300px; }
+    .diagnosis-form { display: none; text-align: left; max-width: 500px; margin: 1rem auto; background: #fff; padding: 1rem; border-radius: 10px; }
+    textarea { width: 100%; height: 80px; margin-top: 0.5rem; }
+    select { width: 100%; margin-top: 0.25rem; }
   </style>
 </head>
 <body>
-  <h2>舌苔辨識互動測驗</h2>
-
-  <p>📌 參考下方五區圖進行觀察</p>
-  <img src="{{ url_for('static', filename='tongue_map.png') }}" style="width: 300px; border: 1px solid #aaa;">
-
+  <h2>舌苔辨識相機</h2>
+  <img src="{{ url_for('static', filename='tongue_map.png') }}" alt="五區示意圖" style="max-width: 90%; margin-bottom: 1rem;" />
   <div id="videoWrapper">
     <video id="camera" autoplay playsinline muted></video>
-    <img id="overlay" src="{{ url_for('static', filename='tongue_map.png') }}" alt="五區參考圖">
+    <img id="overlay" src="{{ url_for('static', filename='overlay.png') }}" alt="overlay">
   </div>
-
   <div>
     <button id="captureBtn">拍照 + 送出判斷</button>
     <button onclick="history.back()">上一頁</button>
   </div>
 
-  <h3>請依據觀察填寫以下區域判斷</h3>
-  <form id="quizForm">
-    <label>心：</label><select name="心">
-      <option value="白苔">白苔</option>
-      <option value="偏紅">偏紅</option>
-      <option value="偏紫">偏紫</option>
-      <option value="偏黃">偏黃</option>
-      <option value="偏黑灰">偏黑灰</option>
-      <option value="健康">健康</option>
-    </select><br>
-    <label>肝：</label><select name="肝">
-      <option value="白苔">白苔</option>
-      <option value="偏紅">偏紅</option>
-      <option value="偏紫">偏紫</option>
-      <option value="偏黃">偏黃</option>
-      <option value="偏黑灰">偏黑灰</option>
-      <option value="健康">健康</option>
-    </select><br>
-    <label>脾：</label><select name="脾">
-      <option value="白苔">白苔</option>
-      <option value="偏紅">偏紅</option>
-      <option value="偏紫">偏紫</option>
-      <option value="偏黃">偏黃</option>
-      <option value="偏黑灰">偏黑灰</option>
-      <option value="健康">健康</option>
-    </select><br>
-    <label>肺：</label><select name="肺">
-      <option value="白苔">白苔</option>
-      <option value="偏紅">偏紅</option>
-      <option value="偏紫">偏紫</option>
-      <option value="偏黃">偏黃</option>
-      <option value="偏黑灰">偏黑灰</option>
-      <option value="健康">健康</option>
-    </select><br>
-    <label>腎：</label><select name="腎">
-      <option value="白苔">白苔</option>
-      <option value="偏紅">偏紅</option>
-      <option value="偏紫">偏紫</option>
-      <option value="偏黃">偏黃</option>
-      <option value="偏黑灰">偏黑灰</option>
-      <option value="健康">健康</option>
-    </select><br>
-    <label>我的觀察總結：</label><br>
-    <textarea name="user_summary" rows="4" placeholder="請描述你對舌頭的整體觀察..."></textarea>
+  <form class="diagnosis-form" id="diagnosisForm">
+    <h3>請觀察舌頭五區後選擇下列判斷：</h3>
+    <label>心區：</label><select name="心"><option>白苔</option><option>偏紅</option><option>偏黃</option><option>偏紫</option><option>偏黑灰</option></select><br>
+    <label>肝區：</label><select name="肝"><option>白苔</option><option>偏紅</option><option>偏黃</option><option>偏紫</option><option>偏黑灰</option></select><br>
+    <label>脾區：</label><select name="脾"><option>白苔</option><option>偏紅</option><option>偏黃</option><option>偏紫</option><option>偏黑灰</option></select><br>
+    <label>肺區：</label><select name="肺"><option>白苔</option><option>偏紅</option><option>偏黃</option><option>偏紫</option><option>偏黑灰</option></select><br>
+    <label>腎區：</label><select name="腎"><option>白苔</option><option>偏紅</option><option>偏黃</option><option>偏紫</option><option>偏黑灰</option></select><br>
+    <label>你的總結：</label><textarea name="summary"></textarea><br>
+    <button type="submit">送出診斷</button>
   </form>
 
   <script>
     const video = document.getElementById("camera");
     const captureBtn = document.getElementById("captureBtn");
     const overlay = document.getElementById("overlay");
+    const diagnosisForm = document.getElementById("diagnosisForm");
+    let capturedBlob = null;
 
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
       .then(stream => { video.srcObject = stream; video.onloadedmetadata = () => video.play(); })
@@ -95,35 +60,49 @@
       ctx.drawImage(overlay, 0, 0, snap.width, snap.height);
 
       snap.toBlob(blob => {
-        const formData = new FormData();
-        formData.append("image", blob);
-        const formEl = document.getElementById("quizForm");
-        const formDataObj = Object.fromEntries(new FormData(formEl));
-        const summary = formDataObj.user_summary || "(無提供)";
-        delete formDataObj.user_summary;
-        formData.append("user_answers", JSON.stringify(formDataObj));
-        formData.append("user_summary", summary);
-
-        fetch("/upload", { method: "POST", body: formData })
-          .then(res => res.json())
-          .then(data => {
-            let table = "<table border='1'><tr><th>區域</th><th>你的答案</th><th>診斷</th><th>理論</th><th>建議</th></tr>";
-            Object.keys(data["五區分析"]).forEach(region => {
-              const r = data["五區分析"][region];
-              table += `<tr><td>${r.區域}</td><td>${formDataObj[r.區域]}</td><td>${r.診斷}</td><td>${r.理論}</td><td>${r.建議}</td></tr>`;
-            });
-            table += "</table>";
-
-            Swal.fire({
-              title: "🧠 判讀結果",
-              html: `<b>舌苔主色：</b> ${data["舌苔主色"]}<br><br>${table}<br><b>你的觀察總結：</b><br>${summary}`,
-              icon: "info"
-            });
-          })
-          .catch(err => {
-            Swal.fire("❌ 上傳失敗", err.message, "error");
-          });
+        capturedBlob = blob;
+        diagnosisForm.style.display = "block";
+        window.scrollTo({ top: diagnosisForm.offsetTop, behavior: 'smooth' });
       }, "image/jpeg");
+    });
+
+    diagnosisForm.addEventListener("submit", e => {
+      e.preventDefault();
+      const formData = new FormData(diagnosisForm);
+      const answers = {
+        "心": formData.get("心"),
+        "肝": formData.get("肝"),
+        "脾": formData.get("脾"),
+        "肺": formData.get("肺"),
+        "腎": formData.get("腎")
+      };
+
+      const sendData = new FormData();
+      sendData.append("image", capturedBlob);
+      sendData.append("user_answers", JSON.stringify(answers));
+      sendData.append("user_summary", formData.get("summary"));
+
+      fetch("/upload", { method: "POST", body: sendData })
+        .then(res => res.json())
+        .then(data => {
+          let table = "<table border='1'><tr><th>區域</th><th>診斷</th><th>理論</th><th>建議</th></tr>";
+          Object.keys(data["五區分析"]).forEach(region => {
+            const r = data["五區分析"][region];
+            table += `<tr><td>${r.區域}</td><td>${r.診斷}</td><td>${r.理論}</td><td>${r.建議}</td></tr>`;
+          });
+          table += "</table>";
+
+          Swal.fire({
+            title: "🧠 判讀結果",
+            html: `<b>舌苔主色：</b> ${data["舌苔主色"]}<br><br>
+                    <b>你的總結：</b><br>${data["使用者總結"]}<br><br>${table}`,
+            icon: "info",
+            confirmButtonText: "完成"
+          });
+        })
+        .catch(err => {
+          Swal.fire("❌ 上傳失敗", err.message, "error");
+        });
     });
   </script>
 </body>
