@@ -47,17 +47,29 @@
     const overlay = document.getElementById("overlay");
     const diagnosisForm = document.getElementById("diagnosisForm");
     let capturedBlob = null;
+    let stream = null;
 
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
-      .then(stream => { video.srcObject = stream; video.onloadedmetadata = () => video.play(); })
-      .catch(err => { Swal.fire("❌ 相機啟動失敗", err.message, "error"); });
+      .then(s => {
+        stream = s;
+        video.srcObject = stream;
+        video.onloadedmetadata = () => video.play();
+      })
+      .catch(err => {
+        Swal.fire("❌ 相機啟動失敗", err.message, "error");
+      });
 
     captureBtn.addEventListener("click", () => {
       const snap = document.createElement("canvas");
-      snap.width = video.videoWidth; snap.height = video.videoHeight;
+      snap.width = video.videoWidth;
+      snap.height = video.videoHeight;
       const ctx = snap.getContext("2d");
       ctx.drawImage(video, 0, 0, snap.width, snap.height);
       ctx.drawImage(overlay, 0, 0, snap.width, snap.height);
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
 
       snap.toBlob(blob => {
         capturedBlob = blob;
@@ -92,9 +104,11 @@
           });
           table += "</table>";
 
+          const colorDetail = data["色彩值"] ? `<br><b>LAB 色彩平均：</b> L=${data["色彩值"][0]}, A=${data["色彩值"][1]}, B=${data["色彩值"][2]}` : "";
+
           Swal.fire({
             title: "🧠 判讀結果",
-            html: `<b>舌苔主色：</b> ${data["舌苔主色"]}<br><br>
+            html: `<b>舌苔主色：</b> ${data["舌苔主色"]}${colorDetail}<br><br>
                     <b>你的總結：</b><br>${data["使用者總結"]}<br><br>${table}`,
             icon: "info",
             confirmButtonText: "完成"
