@@ -1,65 +1,130 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <title>五區舌診小測驗</title>
-    <style>
-        body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }
-        .zone { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-        textarea { width: 100%; height: 60px; }
-        img.preview { max-width: 300px; margin-top: 10px; display: none; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>舌苔辨識互動測驗</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #f0f0f0; text-align: center; }
+    h2 { margin-top: 1rem; }
+    #videoWrapper { position: relative; width: 100%; max-width: 500px; margin: auto; overflow: hidden; aspect-ratio: 3/4; background: black; }
+    video { width: 150%; transform: translateX(-25%); object-fit: cover; border-radius: 10px; }
+    #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; z-index: 10; }
+    button { margin: 1rem 0.5rem; padding: 0.6rem 1.2rem; font-size: 1.1rem; border: none; border-radius: 6px; background: #4a90e2; color: white; cursor: pointer; }
+    button:hover { background-color: #357ABD; }
+    select, textarea { margin: 0.5rem; padding: 0.4rem; width: 80%; max-width: 300px; }
+  </style>
 </head>
 <body>
-    <h1>五區舌診互動小測驗</h1>
+  <h2>舌苔辨識互動測驗</h2>
 
-    <form method="POST" enctype="multipart/form-data">
-        <p>請直接拍照或上傳舌頭圖片並填寫你對五個區域的觀察與判斷：</p>
-        <input type="file" name="image" accept="image/*" capture="environment" onchange="previewImage(event)" required><br><br>
+  <p>📌 參考下方五區圖進行觀察</p>
+  <img src="{{ url_for('static', filename='tongue_map.png') }}" style="width: 300px; border: 1px solid #aaa;">
 
-        <img id="preview" class="preview" src="#" alt="預覽圖片">
+  <div id="videoWrapper">
+    <video id="camera" autoplay playsinline muted></video>
+    <img id="overlay" src="{{ url_for('static', filename='tongue_map.png') }}" alt="五區參考圖">
+  </div>
 
-        {% for zone in ["心", "肝", "脾", "肺", "腎"] %}
-            <div class="zone">
-                <strong>{{ zone }} 區：</strong><br>
-                <textarea name="{{ zone }}">{{ user_answers.get(zone, "") }}</textarea>
-            </div>
-        {% endfor %}
+  <div>
+    <button id="captureBtn">拍照 + 送出判斷</button>
+    <button onclick="history.back()">上一頁</button>
+  </div>
 
-        <button type="submit">送出分析與對照</button>
-    </form>
+  <h3>請依據觀察填寫以下區域判斷</h3>
+  <form id="quizForm">
+    <label>心：</label><select name="心">
+      <option value="白苔">白苔</option>
+      <option value="偏紅">偏紅</option>
+      <option value="偏紫">偏紫</option>
+      <option value="偏黃">偏黃</option>
+      <option value="偏黑灰">偏黑灰</option>
+      <option value="健康">健康</option>
+    </select><br>
+    <label>肝：</label><select name="肝">
+      <option value="白苔">白苔</option>
+      <option value="偏紅">偏紅</option>
+      <option value="偏紫">偏紫</option>
+      <option value="偏黃">偏黃</option>
+      <option value="偏黑灰">偏黑灰</option>
+      <option value="健康">健康</option>
+    </select><br>
+    <label>脾：</label><select name="脾">
+      <option value="白苔">白苔</option>
+      <option value="偏紅">偏紅</option>
+      <option value="偏紫">偏紫</option>
+      <option value="偏黃">偏黃</option>
+      <option value="偏黑灰">偏黑灰</option>
+      <option value="健康">健康</option>
+    </select><br>
+    <label>肺：</label><select name="肺">
+      <option value="白苔">白苔</option>
+      <option value="偏紅">偏紅</option>
+      <option value="偏紫">偏紫</option>
+      <option value="偏黃">偏黃</option>
+      <option value="偏黑灰">偏黑灰</option>
+      <option value="健康">健康</option>
+    </select><br>
+    <label>腎：</label><select name="腎">
+      <option value="白苔">白苔</option>
+      <option value="偏紅">偏紅</option>
+      <option value="偏紫">偏紫</option>
+      <option value="偏黃">偏黃</option>
+      <option value="偏黑灰">偏黑灰</option>
+      <option value="健康">健康</option>
+    </select><br>
+    <label>我的觀察總結：</label><br>
+    <textarea name="user_summary" rows="4" placeholder="請描述你對舌頭的整體觀察..."></textarea>
+  </form>
 
-    {% if filename %}
-        <hr>
-        <h2>🖼️ 舌頭區域對照圖：</h2>
-        <img src="{{ url_for('static', filename='tongue_map.png') }}" style="width: 300px;">
-    {% endif %}
+  <script>
+    const video = document.getElementById("camera");
+    const captureBtn = document.getElementById("captureBtn");
+    const overlay = document.getElementById("overlay");
 
-    {% if result %}
-        <hr>
-        <h2>🔍 分析結果與比對</h2>
-        {% for zone in result %}
-            <div class="zone">
-                <strong>{{ zone }} 區</strong><br>
-                🧠 <u>你輸入的觀察：</u> {{ user_answers[zone] }}<br>
-                🧪 <u>系統診斷：</u> {{ result[zone]["診斷"] }}<br>
-                ✅ <u>比對結果：</u> {{ compare[zone] }}<br>
-                📖 理論：{{ result[zone]["理論"] }}<br>
-                💡 建議：{{ result[zone]["建議"] }}
-            </div>
-        {% endfor %}
-    {% endif %}
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+      .then(stream => { video.srcObject = stream; video.onloadedmetadata = () => video.play(); })
+      .catch(err => { Swal.fire("❌ 相機啟動失敗", err.message, "error"); });
 
-    <script>
-        function previewImage(event) {
-            const reader = new FileReader();
-            reader.onload = function(){
-                const output = document.getElementById('preview');
-                output.src = reader.result;
-                output.style.display = 'block';
-            };
-            reader.readAsDataURL(event.target.files[0]);
-        }
-    </script>
+    captureBtn.addEventListener("click", () => {
+      const snap = document.createElement("canvas");
+      snap.width = video.videoWidth; snap.height = video.videoHeight;
+      const ctx = snap.getContext("2d");
+      ctx.drawImage(video, 0, 0, snap.width, snap.height);
+      ctx.drawImage(overlay, 0, 0, snap.width, snap.height);
+
+      snap.toBlob(blob => {
+        const formData = new FormData();
+        formData.append("image", blob);
+        const formEl = document.getElementById("quizForm");
+        const formDataObj = Object.fromEntries(new FormData(formEl));
+        const summary = formDataObj.user_summary || "(無提供)";
+        delete formDataObj.user_summary;
+        formData.append("user_answers", JSON.stringify(formDataObj));
+        formData.append("user_summary", summary);
+
+        fetch("/upload", { method: "POST", body: formData })
+          .then(res => res.json())
+          .then(data => {
+            let table = "<table border='1'><tr><th>區域</th><th>你的答案</th><th>診斷</th><th>理論</th><th>建議</th></tr>";
+            Object.keys(data["五區分析"]).forEach(region => {
+              const r = data["五區分析"][region];
+              table += `<tr><td>${r.區域}</td><td>${formDataObj[r.區域]}</td><td>${r.診斷}</td><td>${r.理論}</td><td>${r.建議}</td></tr>`;
+            });
+            table += "</table>";
+
+            Swal.fire({
+              title: "🧠 判讀結果",
+              html: `<b>舌苔主色：</b> ${data["舌苔主色"]}<br><br>${table}<br><b>你的觀察總結：</b><br>${summary}`,
+              icon: "info"
+            });
+          })
+          .catch(err => {
+            Swal.fire("❌ 上傳失敗", err.message, "error");
+          });
+      }, "image/jpeg");
+    });
+  </script>
 </body>
 </html>
