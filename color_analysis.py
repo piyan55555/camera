@@ -1,68 +1,77 @@
-from PIL import Image, ImageDraw
+import cv2
 import numpy as np
 
-# 五區座標（圖片 resize 成 300x400 後使用）
-zones = {
-    "舌尖（心肺）": [(110, 310), (190, 310), (180, 350), (120, 350)],
-    "膽": [(60, 180), (100, 260), (130, 260), (100, 180)],
-    "脾胃": [(130, 150), (130, 260), (170, 260), (170, 150)],
-    "肝": [(170, 180), (200, 260), (240, 260), (200, 180)],
-    "腎": [(100, 80), (200, 80), (200, 130), (100, 130)]
+REGION_THEORY = {
+    "心": "舌尖代表心肺功能，紅潤正常，偏紅可能火氣旺。",
+    "肝": "舌邊屬肝膽，紅紫為肝火，齒痕為脾虛。",
+    "脾": "舌中對應脾胃，苔厚黃表示濕熱。",
+    "肺": "舌前屬肺，白苔為正常，黃苔為肺熱。",
+    "腎": "舌根代表腎，黑苔灰苔顯示腎氣不足。"
 }
 
-# 色彩分類與中醫對應建議
-color_map = {
-    "黃色": "火氣大，需調理肝膽系統",
-    "白色厚重": "濕氣重，可能為代謝循環不佳",
-    "黑灰色": "請留意嚴重疾病如腎病或癌症",
-    "正常舌色": "正常紅舌或紅帶薄白，健康狀態",
-    "未知": "色彩無法明確分類，建議重新拍攝或補光"
+REGION_ADVICE_RULE = {
+    "心": {"偏紅": "避免熬夜與過度壓力，多喝溫水。", "其他": "維持規律作息與心情平穩。"},
+    "肝": {"偏紫": "注意疏肝解鬱，避免暴怒與壓力。", "其他": "保持情緒舒暢，避免油炸物。"},
+    "脾": {"偏黃": "脾胃濕熱，少吃油膩甜食，多運動。", "其他": "飲食均衡，避免暴飲暴食。"},
+    "肺": {"偏黃": "肺熱，避免辛辣煎炸，多喝水。", "其他": "保持空氣流通，避免吸菸。"},
+    "腎": {"偏黑灰": "腎氣不足，注意保暖，早睡避免疲勞。", "其他": "作息規律，避免久坐。"}
 }
 
-# RGB → 顏色分類
-def determine_category_from_rgb(r, g, b):
-    brightness = (r + g + b) / 3
-    if r > 130 and g < 140 and b < 140 and brightness < 190:
-        return "正常舌色"
-    elif r > 140 and g > 110 and b < 100 and brightness > 150:
-        return "黃色"
-    elif brightness > 180 and min(r, g, b) > 160:
-        return "白色厚重"
-    elif brightness < 100 and max(abs(r - g), abs(g - b), abs(r - b)) < 60:
-        return "黑灰色"
+def diagnose_region(L, A, B):
+    if A > 145 and B < 150 and L > 120:
+        return "健康"
+    elif B > 150 and A > 140 and L > 130:
+        return "偏黃"
+    elif L > 190 and A < 135:
+        return "白苔"
+    elif L < 90 and A < 130 and B < 130:
+        return "偏黑灰"
+    elif A > 160:
+        return "偏紅"
+    elif A > 150:
+        return "偏紫"
     else:
-        return "未知"
+        return "無明顯症狀"
 
-# 將多邊形轉成遮罩
-def poly_to_mask(size, polygon):
-    mask = Image.new("L", size, 0)
-    ImageDraw.Draw(mask).polygon(polygon, outline=1, fill=1)
-    return np.array(mask)
+def analyze_tongue_regions(image_path):
+    img = cv2.imread(image_path)
+    if img is None:
+        raise FileNotFoundError(f"找不到圖片: {image_path}")
 
-# 分析五區顏色與中醫建議
-def analyze_five_zones(image_path):
-    image = Image.open(image_path).convert("RGB").resize((300, 400))
-    img_array = np.array(image)
-    result = {}
+    img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    h, w, _ = img.shape
 
-    for zone, poly in zones.items():
-        mask = poly_to_mask((300, 400), poly)
-        pixels = img_array[mask == 1]
-        if len(pixels) == 0:
-            avg = (0, 0, 0)
-        else:
-            avg = tuple(map(int, np.mean(pixels, axis=0)))
-        cat = determine_category_from_rgb(*avg)
-        result[zone] = {
-            "RGB": avg,
-            "顏色": cat,
-            "推論": color_map.get(cat, "無法判斷")
+    rois = {
+        "心": img_lab[0:h//3, w//3:2*w//3],
+        "肝": img_lab[h//3:2*h//3, 0:w//3],
+        "脾": img_lab[h//3:2*h//3, 2*w//3:w],
+        "肺": img_lab[0:h//3, 0:w//3],
+        "腎": img_lab[2*h//3:h, w//3:2*w//3],
+    }
+
+    results = {}
+    for region, roi_lab in rois.items():
+        avg_lab = np.mean(roi_lab.reshape(-1, 3), axis=0)
+        L, A, B = avg_lab
+        diagnosis = diagnose_region(L, A, B)
+        advice = REGION_ADVICE_RULE.get(region, {}).get(diagnosis, "保持良好作息")
+
+        results[region] = {
+            "區域": region,
+            "診斷": diagnosis,
+            "理論": REGION_THEORY.get(region, "無理論"),
+            "建議": advice
         }
 
-    return result
+    return results
 
-# 測試用：可用 CLI 執行
-if __name__ == "__main__":
-    from pprint import pprint
-    res = analyze_five_zones("your_image.jpg")  # 替換為圖片檔名
-    pprint(res)
+def analyze_image_color(image_path):
+    img = cv2.imread(image_path)
+    img_lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    avg_lab = np.mean(img_lab.reshape(-1, 3), axis=0)
+    L, A, B = avg_lab
+    if A > 145 and B < 150 and L > 120:
+        main_color = "健康"
+    else:
+        main_color = "無明顯異常"
+    return main_color, "舌苔判讀", "維持現狀即可", [int(c) for c in avg_lab]
