@@ -96,13 +96,34 @@
 
       fetch("/upload", { method: "POST", body: sendData })
         .then(res => res.json())
-        .then(data => {
-          let table = "<table border='1'><tr><th>區域</th><th>診斷</th><th>理論</th><th>建議</th></tr>";
-          Object.keys(data["五區分析"]).forEach(region => {
-            const r = data["五區分析"][region];
-            table += `<tr><td>${r.區域}</td><td>${r.診斷}</td><td>${r.理論}</td><td>${r.建議}</td></tr>`;
-          });
-          table += "</table>";
+.then(data => {
+    // 使用者觀察表格
+    let userTable = "<table border='1'><tr><th>區域</th><th>使用者觀察</th></tr>";
+    Object.keys(data["使用者觀察"]).forEach(region => {
+        userTable += `<tr><td>${region}</td><td>${data["使用者觀察"][region]}</td></tr>`;
+    });
+    userTable += "</table>";
+
+    // 系統分析表格
+    let sysTable = "<table border='1'><tr><th>區域</th><th>診斷</th><th>理論</th><th>建議</th></tr>";
+    Object.keys(data["五區分析"]).forEach(region => {
+        const r = data["五區分析"][region];
+        sysTable += `<tr><td>${r.區域}</td><td>${r.診斷}</td><td>${r.理論}</td><td>${r.建議}</td></tr>`;
+    });
+    sysTable += "</table>";
+
+    const colorDetail = data["色彩值"] ? `<br><b>LAB 色彩平均：</b> L=${data["色彩值"][0]}, A=${data["色彩值"][1]}, B=${data["色彩值"][2]}` : "";
+
+    Swal.fire({
+        title: "🧠 判讀結果",
+        html: `<b>舌苔主色：</b> ${data["舌苔主色"]}${colorDetail}<br><br>
+               <b>你的總結：</b><br>${data["使用者總結"]}<br><br>
+               <b>使用者觀察：</b><br>${userTable}<br><br>
+               <b>系統五區分析：</b><br>${sysTable}`,
+        icon: "info",
+        confirmButtonText: "完成"
+    });
+
 
           const colorDetail = data["色彩值"] ? `<br><b>LAB 色彩平均：</b> L=${data["色彩值"][0]}, A=${data["色彩值"][1]}, B=${data["色彩值"][2]}` : "";
 
