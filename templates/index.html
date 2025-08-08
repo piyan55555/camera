@@ -41,104 +41,104 @@
     <button type="submit">送出診斷</button>
   </form>
 
-  <script>
-    const video = document.getElementById("camera");
-    const captureBtn = document.getElementById("captureBtn");
-    const overlay = document.getElementById("overlay");
-    const diagnosisForm = document.getElementById("diagnosisForm");
-    let capturedBlob = null;
-    let stream = null;
+ <script>
+  const video = document.getElementById("camera");
+  const captureBtn = document.getElementById("captureBtn");
+  const overlay = document.getElementById("overlay");
+  const diagnosisForm = document.getElementById("diagnosisForm");
+  let capturedBlob = null;
+  let stream = null;
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
-      .then(s => {
-        stream = s;
-        video.srcObject = stream;
-        video.onloadedmetadata = () => video.play();
+  // 啟動相機
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+    .then(s => {
+      stream = s;
+      video.srcObject = stream;
+      video.onloadedmetadata = () => video.play();
+    })
+    .catch(err => {
+      Swal.fire("❌ 相機啟動失敗", err.message, "error");
+    });
+
+  // 拍照事件
+  captureBtn.addEventListener("click", () => {
+    const snap = document.createElement("canvas");
+    snap.width = video.videoWidth;
+    snap.height = video.videoHeight;
+    const ctx = snap.getContext("2d");
+    ctx.drawImage(video, 0, 0, snap.width, snap.height);
+    ctx.drawImage(overlay, 0, 0, snap.width, snap.height);
+
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+
+    snap.toBlob(blob => {
+      capturedBlob = blob;
+      diagnosisForm.style.display = "block";
+      window.scrollTo({ top: diagnosisForm.offsetTop, behavior: 'smooth' });
+    }, "image/jpeg");
+  });
+
+  // 表單送出
+  diagnosisForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const formData = new FormData(diagnosisForm);
+    const answers = {
+      "心": formData.get("心"),
+      "肝": formData.get("肝"),
+      "脾": formData.get("脾"),
+      "肺": formData.get("肺"),
+      "腎": formData.get("腎")
+    };
+
+    const sendData = new FormData();
+    sendData.append("image", capturedBlob);
+    sendData.append("user_answers", JSON.stringify(answers));
+    sendData.append("user_summary", formData.get("summary"));
+
+    fetch("/upload", { method: "POST", body: sendData })
+      .then(res => {
+        if (!res.ok) throw new Error(`伺服器錯誤：${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        // 使用者觀察表格
+        let userTable = "<table style='border-collapse: collapse; width: 100%;'><tr><th style='border:1px solid #ccc;padding:6px;'>區域</th><th style='border:1px solid #ccc;padding:6px;'>使用者觀察</th></tr>";
+        Object.keys(data["使用者觀察"] || {}).forEach(region => {
+          userTable += `<tr><td style='border:1px solid #ccc;padding:6px;'>${region}</td><td style='border:1px solid #ccc;padding:6px;'>${data["使用者觀察"][region]}</td></tr>`;
+        });
+        userTable += "</table>";
+
+        // 系統分析表格
+        let sysTable = "<table style='border-collapse: collapse; width: 100%; margin-top: 1rem;'><tr><th style='border:1px solid #ccc;padding:6px;'>區域</th><th style='border:1px solid #ccc;padding:6px;'>診斷</th><th style='border:1px solid #ccc;padding:6px;'>理論</th><th style='border:1px solid #ccc;padding:6px;'>建議</th></tr>";
+        Object.keys(data["五區分析"]).forEach(region => {
+          const r = data["五區分析"][region];
+          sysTable += `<tr>
+            <td style='border:1px solid #ccc;padding:6px;'>${r.區域}</td>
+            <td style='border:1px solid #ccc;padding:6px;'>${r.診斷}</td>
+            <td style='border:1px solid #ccc;padding:6px;'>${r.理論}</td>
+            <td style='border:1px solid #ccc;padding:6px;'>${r.建議}</td>
+          </tr>`;
+        });
+        sysTable += "</table>";
+
+        const colorDetail = data["色彩值"] ? `<br><b>LAB 色彩平均：</b> L=${data["色彩值"][0]}, A=${data["色彩值"][1]}, B=${data["色彩值"][2]}` : "";
+
+        Swal.fire({
+          title: "🧠 判讀結果",
+          html: `<b>舌苔主色：</b> ${data["舌苔主色"]}${colorDetail}<br><br>
+                 <b>你的總結：</b><br>${data["使用者總結"]}<br><br>
+                 <b>使用者觀察：</b><br>${userTable}<br><br>
+                 <b>系統五區分析：</b><br>${sysTable}`,
+          icon: "info",
+          confirmButtonText: "完成"
+        });
       })
       .catch(err => {
-        Swal.fire("❌ 相機啟動失敗", err.message, "error");
+        Swal.fire("❌ 上傳失敗", err.message, "error");
       });
-
-    captureBtn.addEventListener("click", () => {
-      const snap = document.createElement("canvas");
-      snap.width = video.videoWidth;
-      snap.height = video.videoHeight;
-      const ctx = snap.getContext("2d");
-      ctx.drawImage(video, 0, 0, snap.width, snap.height);
-      ctx.drawImage(overlay, 0, 0, snap.width, snap.height);
-
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-
-      snap.toBlob(blob => {
-        capturedBlob = blob;
-        diagnosisForm.style.display = "block";
-        window.scrollTo({ top: diagnosisForm.offsetTop, behavior: 'smooth' });
-      }, "image/jpeg");
-    });
-
-    diagnosisForm.addEventListener("submit", e => {
-      e.preventDefault();
-      const formData = new FormData(diagnosisForm);
-      const answers = {
-        "心": formData.get("心"),
-        "肝": formData.get("肝"),
-        "脾": formData.get("脾"),
-        "肺": formData.get("肺"),
-        "腎": formData.get("腎")
-      };
-
-      const sendData = new FormData();
-      sendData.append("image", capturedBlob);
-      sendData.append("user_answers", JSON.stringify(answers));
-      sendData.append("user_summary", formData.get("summary"));
-
-      fetch("/upload", { method: "POST", body: sendData })
-        .then(res => res.json())
-.then(data => {
-    // 使用者觀察表格
-    let userTable = "<table border='1'><tr><th>區域</th><th>使用者觀察</th></tr>";
-    Object.keys(data["使用者觀察"]).forEach(region => {
-        userTable += `<tr><td>${region}</td><td>${data["使用者觀察"][region]}</td></tr>`;
-    });
-    userTable += "</table>";
-
-    // 系統分析表格
-    let sysTable = "<table border='1'><tr><th>區域</th><th>診斷</th><th>理論</th><th>建議</th></tr>";
-    Object.keys(data["五區分析"]).forEach(region => {
-        const r = data["五區分析"][region];
-        sysTable += `<tr><td>${r.區域}</td><td>${r.診斷}</td><td>${r.理論}</td><td>${r.建議}</td></tr>`;
-    });
-    sysTable += "</table>";
-
-    const colorDetail = data["色彩值"] ? `<br><b>LAB 色彩平均：</b> L=${data["色彩值"][0]}, A=${data["色彩值"][1]}, B=${data["色彩值"][2]}` : "";
-
-    Swal.fire({
-        title: "🧠 判讀結果",
-        html: `<b>舌苔主色：</b> ${data["舌苔主色"]}${colorDetail}<br><br>
-               <b>你的總結：</b><br>${data["使用者總結"]}<br><br>
-               <b>使用者觀察：</b><br>${userTable}<br><br>
-               <b>系統五區分析：</b><br>${sysTable}`,
-        icon: "info",
-        confirmButtonText: "完成"
-    });
-
-
-          const colorDetail = data["色彩值"] ? `<br><b>LAB 色彩平均：</b> L=${data["色彩值"][0]}, A=${data["色彩值"][1]}, B=${data["色彩值"][2]}` : "";
-
-          Swal.fire({
-            title: "🧠 判讀結果",
-            html: `<b>舌苔主色：</b> ${data["舌苔主色"]}${colorDetail}<br><br>
-                    <b>你的總結：</b><br>${data["使用者總結"]}<br><br>${table}`,
-            icon: "info",
-            confirmButtonText: "完成"
-          });
-        })
-        .catch(err => {
-          Swal.fire("❌ 上傳失敗", err.message, "error");
-        });
-    });
-  </script>
+  });
+</script>
 </body>
 </html>
