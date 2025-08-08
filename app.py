@@ -1,3 +1,4 @@
+import json
 from flask import Flask, render_template, request, jsonify
 import os
 import uuid
@@ -31,10 +32,17 @@ def upload():
     # 五區分析
     region_results = analyze_tongue_regions(path)
 
+    # 解析使用者觀察 JSON
+    try:
+        user_answers_dict = json.loads(user_answers) if user_answers else {}
+    except json.JSONDecodeError:
+        user_answers_dict = {}
+
     return jsonify({
         "舌苔主色": main_color,
         "色彩值": avg_lab,
         "使用者總結": user_summary,
+        "使用者觀察": user_answers_dict,
         "五區分析": region_results
     })
 
